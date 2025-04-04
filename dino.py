@@ -4,6 +4,7 @@ import random
 import textwrap
 import time
 import math
+import json
 
 # Inicialização
 pygame.init()
@@ -80,6 +81,10 @@ def carregar_som(nome_arquivo):
     try:
         return pygame.mixer.Sound(caminho)
     except:
+        fonte_erro = fonte_pequena.render(f"Erro: {nome_arquivo} não encontrado", True, VERMELHO)
+        tela.blit(fonte_erro, (10, 10))
+        pygame.display.flip()
+        time.sleep(1)
         print(f"Erro ao carregar {nome_arquivo}. Usando silêncio como fallback.")
         return None
 
@@ -96,20 +101,20 @@ recursos = {
     "botao_proximo": carregar_imagem("botao_proximo.png", (70, 25))
 }
 
-# Sons específicos para cada dinossauro
+# Sons
 sons = {
-    "velociraptor_attack": carregar_som("velociraptor_attack.wav"),
-    "velociraptor_damage": carregar_som("velociraptor_damage.wav"),
-    "dilofossauro_attack": carregar_som("dilofossauro_attack.wav"),
-    "dilofossauro_damage": carregar_som("dilofossauro_damage.wav"),
-    "t_rex_attack": carregar_som("t_rex_attack.wav"),
-    "t_rex_damage": carregar_som("t_rex_damage.wav"),
+    "velociraptor_attack1": carregar_som("velociraptor_attack1.wav"),
+    "velociraptor_attack2": carregar_som("velociraptor_attack2.mp3"),
+    "dilofossauro_attack1": carregar_som("dilofossauro_attack1.wav"),
+    "dilofossauro_attack2": carregar_som("dilofossauro_attack2.wav"),
+    "t_rex_attack1": carregar_som("t_rex_attack1.wav"),
+    "t_rex_attack2": carregar_som("t_rex_attack2.wav.ogg"),
     "defend": carregar_som("defend.wav"),
     "battle_music": "sounds/battle_music.mp3"
 }
 
 class Dinossauro:
-    def __init__(self, nome, sprite, x, y, tipo, vida, ataque, defesa, ataques, chance_critico, cor_contorno, som_ataque, som_dano):
+    def __init__(self, nome, sprite, x, y, tipo, vida, ataque, defesa, ataques, chance_critico, cor_contorno):
         self.nome = nome
         self.sprite = sprite
         self.x = x
@@ -125,13 +130,11 @@ class Dinossauro:
         self.chance_critico = chance_critico
         self.chance_critico_atual = chance_critico
         self.cor_contorno = cor_contorno
-        self.status = {"veneno": 0, "sangramento": 0}
+        self.status = {"veneno": 0, "sangramento": 0, "atordoado": 0}
         self.defesa_ativa = False
         self.animacao_ataque = False
         self.frame_animacao = 0
         self.pulsacao = 0
-        self.som_ataque = som_ataque  # Som específico de ataque
-        self.som_dano = som_dano      # Som específico de dano
 
 class Botao:
     def __init__(self, x, y, sprite, texto, descricao=None):
@@ -232,9 +235,6 @@ def desenhar_barra_vida_e_sangramento(dino, x, y):
     if dino.status["sangramento"] > 0:
         sangramento_largura = largura * (dino.status["sangramento"] / 3)
         pygame.draw.rect(tela, VERMELHO_ESCURO, (x, y + altura + espacamento, sangramento_largura, altura))
-        
-        texto_sangramento = fonte_pequena.render(f"Sangramento: {dino.status['sangramento']} turnos", True, BRANCO)
-        tela.blit(texto_sangramento, (x, y + altura + espacamento + altura + 5))
 
 def aplicar_efeito(alvo, efeito):
     if efeito and random.random() <= 0.8:
@@ -244,6 +244,9 @@ def aplicar_efeito(alvo, efeito):
         elif efeito == "sangramento":
             alvo.status["sangramento"] = min(3, alvo.status["sangramento"] + 1)
             return f"{alvo.nome} está sangrando!"
+        elif efeito == "atordoar" and random.random() <= 0.5:
+            alvo.status["atordoado"] = 1
+            return f"{alvo.nome} foi atordoado!"
     return ""
 
 def processar_status(dino):
@@ -262,8 +265,6 @@ def processar_status(dino):
         dino.status["sangramento"] -= 1
     
     dino.vida = max(0, dino.vida - dano_total)
-    if dano_total > 0 and dino.som_dano:
-        dino.som_dano.play()  # Toca o som de dano específico do dinossauro
     return mensagens
 
 def desenhar_dinossauro_com_destaque(tela, dino, tempo):
@@ -312,6 +313,9 @@ def tela_inicio():
 def mostrar_opcoes():
     botao_voltar = Botao(LARGURA//2 - 75, ALTURA - 100, recursos["botao_defender"], "VOLTAR")
     volume = 0.5
+    dificuldade = "Normal"
+    botao_facil = Botao(LARGURA//2, 300, recursos["botao_atacar"], "Fácil")
+    botao_normal = Botao(LARGURA//2 + 160, 300, recursos["botao_atacar"], "Normal")
     
     while True:
         tela.blit(recursos["fundo_menu"], (0, 0))
@@ -323,6 +327,11 @@ def mostrar_opcoes():
         pygame.draw.rect(tela, CINZA, (LARGURA//2, 200, 200, 20), border_radius=10)
         pygame.draw.rect(tela, VERDE, (LARGURA//2, 200, int(200 * volume), 20), border_radius=10)
         
+        texto_dificuldade = fonte_pequena.render(f"Dificuldade: {dificuldade}", True, BRANCO)
+        tela.blit(texto_dificuldade, (LARGURA//2 - 150, 300))
+        botao_facil.desenhar(tela)
+        botao_normal.desenhar(tela)
+        
         controles = [
             "CONTROLES:",
             "- Clique nos botões para atacar ou defender",
@@ -332,7 +341,7 @@ def mostrar_opcoes():
         
         for i, linha in enumerate(controles):
             texto = fonte_pequena.render(linha, True, BRANCO)
-            tela.blit(texto, (LARGURA//2 - texto.get_width()//2, 250 + i*25))
+            tela.blit(texto, (LARGURA//2 - texto.get_width()//2, 350 + i*25))
         
         botao_voltar.desenhar(tela)
         
@@ -342,7 +351,11 @@ def mostrar_opcoes():
                 return
             if evento.type == pygame.MOUSEBUTTONDOWN:
                 if botao_voltar.verificar_clique(pygame.mouse.get_pos()):
-                    return
+                    return dificuldade
+                if botao_facil.verificar_clique(pygame.mouse.get_pos()):
+                    dificuldade = "Fácil"
+                if botao_normal.verificar_clique(pygame.mouse.get_pos()):
+                    dificuldade = "Normal"
                 if LARGURA//2 <= pygame.mouse.get_pos()[0] <= LARGURA//2 + 200 and 200 <= pygame.mouse.get_pos()[1] <= 220:
                     volume = (pygame.mouse.get_pos()[0] - LARGURA//2) / 200
                     pygame.mixer.music.set_volume(volume)
@@ -362,8 +375,8 @@ def tela_selecao():
         "Tipo: Carnívoro Ágil",
         "HP: 80 | ATQ: 22 | DEF: 6 | Crit: 25%+",
         "Ataques:",
-        "- Garra Afiada (14 + sangrar)",
-        "- Mordida (22)"
+        "- Arranhão (14 + sangrar)",  # Ajustado
+        "- Mordida (22)"              # Ajustado
     ]
     
     desc_dilofossauro = [
@@ -371,8 +384,8 @@ def tela_selecao():
         "Tipo: Venenoso Astuto",
         "HP: 70 | ATQ: 20 | DEF: 8 | Crit: 15%+",
         "Ataques:",
-        "- Cuspe Ácido (11 + veneno)",
-        "- Cauda Tóxica (17 + sangrar)"
+        "- Mordida (17 + sangrar)",      # Ajustado
+        "- Veneno da Morte (11 + veneno)"  # Ajustado
     ]
     
     botoes = [
@@ -408,40 +421,52 @@ def tela_selecao():
 
 def animar_ataque(dino, alvo):
     if dino.animacao_ataque:
+        velocidade = 5 + (dino.ataque // 5)
         if dino.frame_animacao < 10:
             if dino.x < alvo.x:
-                dino.x += 10
+                dino.x += velocidade
             else:
-                dino.x -= 10
+                dino.x -= velocidade
             dino.frame_animacao += 1
-        elif dino.frame_animacao < 20:
-            if dino.x > dino.pos_inicial_x:
-                dino.x -= 10
-            else:
-                dino.x += 10
+        elif dino.frame_animacao < 15:
+            alvo.y = alvo.pos_inicial_y + math.sin(dino.frame_animacao * 2) * 5
             dino.frame_animacao += 1
         else:
             dino.animacao_ataque = False
             dino.frame_animacao = 0
-            dino.x = dino.pos_inicial_x
-            dino.y = dino.pos_inicial_y
+            dino.x, dino.y = dino.pos_inicial_x, dino.pos_inicial_y
+            alvo.y = alvo.pos_inicial_y
 
-def batalha(jogador, inimigo):
-    jogador.x, jogador.y = 120, ALTURA - 130 - jogador.sprite.get_height()
-    inimigo.x, inimigo.y = 530, ALTURA - 220 - inimigo.sprite.get_height()
+def batalha(jogador, inimigo, dificuldade="Normal"):
+    if dificuldade == "Fácil":
+        inimigo.vida = int(inimigo.vida * 0.8)
+        inimigo.vida_max = inimigo.vida
+        inimigo.ataque = int(inimigo.ataque * 0.8)
+    
+    altura_plataforma = 40
+    plataforma_y = ALTURA - altura_plataforma - 100
+    
+    jogador.x, jogador.y = 120, plataforma_y - jogador.sprite.get_height()
+    inimigo.x, inimigo.y = 530, plataforma_y - inimigo.sprite.get_height()
     jogador.pos_inicial_x, jogador.pos_inicial_y = jogador.x, jogador.y
     inimigo.pos_inicial_x, inimigo.pos_inicial_y = inimigo.x, inimigo.y
     
-    botoes = [
-        Botao(50, ALTURA - 100, recursos["botao_atacar"], list(jogador.ataques.keys())[0], ["Ataque básico"]),
-        Botao(210, ALTURA - 100, recursos["botao_atacar"], list(jogador.ataques.keys())[1], ["Ataque especial"]),
-        Botao(130, ALTURA - 50, recursos["botao_defender"], "DEFENDER", ["Reduz dano recebido"])
-    ]
+    if jogador.nome == "Velociraptor":
+        botoes = [
+            Botao(50, ALTURA - 100, recursos["botao_atacar"], "Arranhão", ["Ataque básico"]),
+            Botao(210, ALTURA - 100, recursos["botao_atacar"], "Mordida", ["Ataque especial"]),
+            Botao(130, ALTURA - 50, recursos["botao_defender"], "Esquiva", ["Reduz dano recebido"])
+        ]
+    else:  # Dilofossauro
+        botoes = [
+            Botao(50, ALTURA - 100, recursos["botao_atacar"], "Mordida", ["Ataque básico"]),
+            Botao(210, ALTURA - 100, recursos["botao_atacar"], "Veneno da Morte", ["Ataque especial"]),
+            Botao(130, ALTURA - 50, recursos["botao_defender"], "Escuridão", ["Reduz dano recebido"])
+        ]
     
     caixa_dialogo = CaixaDialogo(50, 100, 700, 100)
     caixa_dialogo.adicionar_mensagem(f"Turno de {jogador.nome}! Escolha sua ação.", turno_jogador=True)
     
-    # Tocar música de fundo
     try:
         pygame.mixer.music.load(sons["battle_music"])
         pygame.mixer.music.set_volume(0.5)
@@ -459,6 +484,10 @@ def batalha(jogador, inimigo):
         tempo += 0.016
         
         tela.blit(recursos["fundo"], (0, 0))
+        
+        plataforma = pygame.Rect(0, plataforma_y, LARGURA, altura_plataforma)
+        pygame.draw.rect(tela, MARROM, plataforma)
+        pygame.draw.rect(tela, CINZA_ESCURO, plataforma, 2)
         
         animar_ataque(jogador, inimigo)
         animar_ataque(inimigo, jogador)
@@ -523,46 +552,60 @@ def batalha(jogador, inimigo):
                         
                         if turno_jogador:
                             rodada += 1
-                            jogador.chance_critico_atual = min(0.50, jogador.chance_critico_atual + 0.05)
-                            caixa_dialogo.adicionar_mensagem(
-                                f"Turno de {jogador.nome}! Chance crítica aumentada para {int(jogador.chance_critico_atual * 100)}%.",
-                                turno_jogador=True
-                            )
+                            if inimigo.status["sangramento"] > 0:
+                                jogador.chance_critico_atual = min(0.35, jogador.chance_critico_atual + 0.05)
+                                caixa_dialogo.adicionar_mensagem(
+                                    f"Turno de {jogador.nome}! Buff de sangramento: Chance crítica aumentada para {int(jogador.chance_critico_atual * 100)}%.",
+                                    turno_jogador=True
+                                )
+                            else:
+                                caixa_dialogo.adicionar_mensagem(
+                                    f"Turno de {jogador.nome}! Escolha sua ação.",
+                                    turno_jogador=True
+                                )
                         else:
                             mensagem = ""
-                            vida_baixa = inimigo.vida < inimigo.vida_max * 0.3
-                            jogador_com_status = jogador.status["veneno"] > 0 or jogador.status["sangramento"] > 0
-                            
-                            if not inimigo.defesa_ativa and vida_baixa and random.random() < 0.6:
-                                inimigo.defesa_ativa = True
-                                mensagem = f"{inimigo.nome} está defendendo!"
-                                if sons["defend"]:
-                                    sons["defend"].play()
+                            if inimigo.status["atordoado"] > 0:
+                                mensagem = f"{inimigo.nome} está atordoado e perdeu o turno!"
+                                inimigo.status["atordoado"] -= 1
                             else:
-                                ataques_disponiveis = list(inimigo.ataques.items())
-                                if not jogador_com_status and random.random() < 0.7:
-                                    ataques_com_efeito = [atq for atq in ataques_disponiveis if atq[1][1]]
-                                    if ataques_com_efeito:
-                                        nome_ataque, (dano, efeito) = random.choice(ataques_com_efeito)
-                                    else:
-                                        nome_ataque, (dano, efeito) = random.choice(ataques_disponiveis)
-                                else:
-                                    nome_ataque, (dano, efeito) = max(ataques_disponiveis, key=lambda x: x[1][0])
+                                vida_baixa = inimigo.vida < inimigo.vida_max * 0.3
+                                jogador_com_status = jogador.status["veneno"] > 0 or jogador.status["sangramento"] > 0
                                 
-                                critico = random.random() < inimigo.chance_critico_atual
-                                dano_final = max(1, dano - (jogador.defesa // 2))
-                                if critico:
-                                    dano_final = int(dano_final * 1.5)
-                                    mensagem += "CRÍTICO! "
-                                if jogador.defesa_ativa:
-                                    dano_final = dano_final // 2
-                                jogador.vida -= dano_final
-                                mensagem += f"{inimigo.nome} usou {nome_ataque}! (-{dano_final} HP)"
-                                if efeito:
-                                    mensagem += "\n" + aplicar_efeito(jogador, efeito)
-                                inimigo.animacao_ataque = True
-                                if inimigo.som_ataque:
-                                    inimigo.som_ataque.play()  # Som de ataque do T-Rex
+                                if not inimigo.defesa_ativa and vida_baixa and random.random() < 0.6:
+                                    inimigo.defesa_ativa = True
+                                    mensagem = f"{inimigo.nome} está defendendo!"
+                                    if sons["defend"]:
+                                        sons["defend"].play()
+                                else:
+                                    ataques_disponiveis = list(inimigo.ataques.items())
+                                    if not jogador_com_status and random.random() < 0.7:
+                                        ataques_com_efeito = [atq for atq in ataques_disponiveis if atq[1][1]]
+                                        if ataques_com_efeito:
+                                            nome_ataque, (dano, efeito, som) = random.choice(ataques_com_efeito)
+                                        else:
+                                            nome_ataque, (dano, efeito, som) = random.choice(ataques_disponiveis)
+                                    else:
+                                        nome_ataque, (dano, efeito, som) = max(ataques_disponiveis, key=lambda x: x[1][0])
+                                    
+                                    critico = random.random() < inimigo.chance_critico_atual
+                                    dano_final = max(1, dano - (jogador.defesa // 2))
+                                    if critico:
+                                        dano_final = int(dano_final * 1.5)
+                                        mensagem += "CRÍTICO! "
+                                    if jogador.defesa_ativa:
+                                        dano_final = dano_final // 2
+                                    jogador.vida -= dano_final
+                                    mensagem += f"{inimigo.nome} usou {nome_ataque}! (-{dano_final} HP)"
+                                    if efeito:
+                                        mensagem += "\n" + aplicar_efeito(jogador, efeito)
+                                    if inimigo.status["veneno"] > 0 and random.random() < 0.5:
+                                        dano_veneno = 5
+                                        inimigo.vida -= dano_veneno
+                                        mensagem += f"\n{inimigo.nome} sofreu {dano_veneno} de dano por atacar envenenado!"
+                                    inimigo.animacao_ataque = True
+                                    if som:
+                                        som.play()
                             
                             caixa_dialogo.adicionar_mensagem(mensagem)
                             esperando_input = False
@@ -576,29 +619,37 @@ def batalha(jogador, inimigo):
                 elif turno_jogador and esperando_input and not jogador.animacao_ataque:
                     for i, botao in enumerate(botoes):
                         if botao.verificar_clique(pos):
-                            mensagem = ""
-                            if i == 2:
-                                jogador.defesa_ativa = True
-                                mensagem = f"{jogador.nome} está defendendo!"
-                                if sons["defend"]:
-                                    sons["defend"].play()
+                            if jogador.status["atordoado"] > 0:
+                                mensagem = f"{jogador.nome} está atordoado e perdeu o turno!"
+                                jogador.status["atordoado"] -= 1
                             else:
-                                nome_ataque = list(jogador.ataques.keys())[i]
-                                dano, efeito = jogador.ataques[nome_ataque]
-                                critico = random.random() < jogador.chance_critico_atual
-                                dano_final = max(1, dano - (inimigo.defesa // 2))
-                                if critico:
-                                    dano_final = int(dano_final * 1.5)
-                                    mensagem += "CRÍTICO! "
-                                if inimigo.defesa_ativa:
-                                    dano_final = dano_final // 2
-                                inimigo.vida -= dano_final
-                                mensagem += f"{jogador.nome} usou {nome_ataque}! (-{dano_final} HP)"
-                                if efeito:
-                                    mensagem += "\n" + aplicar_efeito(inimigo, efeito)
-                                jogador.animacao_ataque = True
-                                if jogador.som_ataque:
-                                    jogador.som_ataque.play()  # Som de ataque do jogador
+                                mensagem = ""
+                                if i == 2:
+                                    jogador.defesa_ativa = True
+                                    mensagem = f"{jogador.nome} usou {botoes[i].texto}!"
+                                    if sons["defend"]:
+                                        sons["defend"].play()
+                                else:
+                                    nome_ataque = list(jogador.ataques.keys())[i]
+                                    dano, efeito, som = jogador.ataques[nome_ataque]
+                                    critico = random.random() < jogador.chance_critico_atual
+                                    dano_final = max(1, dano - (inimigo.defesa // 2))
+                                    if critico:
+                                        dano_final = int(dano_final * 1.5)
+                                        mensagem += "CRÍTICO! "
+                                    if inimigo.defesa_ativa:
+                                        dano_final = dano_final // 2
+                                    inimigo.vida -= dano_final
+                                    mensagem += f"{jogador.nome} usou {botoes[i].texto}! (-{dano_final} HP)"
+                                    if efeito:
+                                        mensagem += "\n" + aplicar_efeito(inimigo, efeito)
+                                    if jogador.status["veneno"] > 0 and random.random() < 0.5:
+                                        dano_veneno = 5
+                                        jogador.vida -= dano_veneno
+                                        mensagem += f"\n{jogador.nome} sofreu {dano_veneno} de dano por atacar envenenado!"
+                                    jogador.animacao_ataque = True
+                                    if som:
+                                        som.play()
                             
                             caixa_dialogo.adicionar_mensagem(mensagem)
                             esperando_input = False
@@ -624,11 +675,12 @@ def criar_dinossauros():
         vida=80, 
         ataque=22,
         defesa=6,
-        ataques={"Garra Afiada": [14, "sangramento"], "Mordida": [22, None]},
+        ataques={
+            "arranhão": [14, "sangramento", sons["velociraptor_attack1"]],  # Ataque 1 ajustado
+            "mordida": [22, None, sons["velociraptor_attack2"]]             # Ataque 2 ajustado
+        },
         chance_critico=0.25,
-        cor_contorno=VERDE,
-        som_ataque=sons["velociraptor_attack"],
-        som_dano=sons["velociraptor_damage"]
+        cor_contorno=VERDE
     )
 
     dilofossauro = Dinossauro(
@@ -640,11 +692,12 @@ def criar_dinossauros():
         vida=70, 
         ataque=20,
         defesa=8,
-        ataques={"Cuspe Ácido": [11, "veneno"], "Cauda Tóxica": [17, "sangramento"]},
+        ataques={
+            "mordida": [17, "sangramento", sons["dilofossauro_attack1"]],      # Ataque 1 ajustado
+            "veneno_da_morte": [11, "veneno", sons["dilofossauro_attack2"]]     # Ataque 2 ajustado
+        },
         chance_critico=0.15,
-        cor_contorno=AZUL,
-        som_ataque=sons["dilofossauro_attack"],
-        som_dano=sons["dilofossauro_damage"]
+        cor_contorno=AZUL
     )
 
     t_rex = Dinossauro(
@@ -654,16 +707,29 @@ def criar_dinossauros():
         y=altura_base - recursos["t_rex"].get_height() - 20,
         tipo="Carnívoro", 
         vida=100, 
-        ataque=10,
+        ataque=15,
         defesa=12,
-        ataques={"Mordida Devastadora": [10, "sangramento"], "Patada": [10, None]},
+        ataques={
+            "t_rex_attack1": [12, "sangramento", sons["t_rex_attack1"]],
+            "t_rex_attack2": [18, "atordoar", sons["t_rex_attack2"]]
+        },
         chance_critico=0.20,
-        cor_contorno=VERMELHO,
-        som_ataque=sons["t_rex_attack"],
-        som_dano=sons["t_rex_damage"]
+        cor_contorno=VERMELHO
     )
 
     return velociraptor, dilofossauro, t_rex
+
+def salvar_progresso(dinossauro_escolhido):
+    with open("progresso.json", "w") as f:
+        json.dump({"dinossauro": dinossauro_escolhido.nome}, f)
+
+def carregar_progresso():
+    try:
+        with open("progresso.json", "r") as f:
+            data = json.load(f)
+            return data["dinossauro"]
+    except:
+        return None
 
 def main():
     while True:
@@ -675,8 +741,12 @@ def main():
             jogador = tela_selecao()
             if not jogador:
                 break
+            salvar_progresso(jogador)
+            ultimo_dino = carregar_progresso()
+            print(f"Último dinossauro escolhido: {ultimo_dino}")
+            dificuldade = mostrar_opcoes() or "Normal"
             _, _, inimigo = criar_dinossauros()
-            resultado = batalha(jogador, inimigo)
+            resultado = batalha(jogador, inimigo, dificuldade)
             if resultado == "sair":
                 break
             elif resultado == "reiniciar":
